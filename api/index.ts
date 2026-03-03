@@ -14,120 +14,139 @@ const dbPath = isVercel ? path.join("/tmp", "dashboard.db") : "dashboard.db";
 const db = new Database(dbPath);
 
 // Initialize Database
-db.exec(`
-  CREATE TABLE IF NOT EXISTS months (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT UNIQUE
-  );
+try {
+  console.log("Initializing database at:", dbPath);
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS months (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT UNIQUE
+    );
 
-  CREATE TABLE IF NOT EXISTS sectors (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT UNIQUE,
-    color TEXT,
-    logo_url TEXT
-  );
+    CREATE TABLE IF NOT EXISTS sectors (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT UNIQUE,
+      color TEXT,
+      logo_url TEXT
+    );
 
-  CREATE TABLE IF NOT EXISTS employees (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    month_id INTEGER,
-    sector_id INTEGER,
-    name TEXT,
-    image_url TEXT,
-    goal TEXT,
-    FOREIGN KEY(month_id) REFERENCES months(id),
-    FOREIGN KEY(sector_id) REFERENCES sectors(id)
-  );
+    CREATE TABLE IF NOT EXISTS employees (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      month_id INTEGER,
+      sector_id INTEGER,
+      name TEXT,
+      image_url TEXT,
+      goal TEXT,
+      FOREIGN KEY(month_id) REFERENCES months(id),
+      FOREIGN KEY(sector_id) REFERENCES sectors(id)
+    );
 
-  CREATE TABLE IF NOT EXISTS indicators (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    month_id INTEGER,
-    sector_id INTEGER,
-    name TEXT,
-    type TEXT, -- 'NUMBER', 'PERCENT', 'CURRENCY'
-    is_negative INTEGER DEFAULT 0,
-    order_index INTEGER,
-    FOREIGN KEY(month_id) REFERENCES months(id),
-    FOREIGN KEY(sector_id) REFERENCES sectors(id)
-  );
+    CREATE TABLE IF NOT EXISTS indicators (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      month_id INTEGER,
+      sector_id INTEGER,
+      name TEXT,
+      type TEXT, -- 'NUMBER', 'PERCENT', 'CURRENCY'
+      is_negative INTEGER DEFAULT 0,
+      order_index INTEGER,
+      FOREIGN KEY(month_id) REFERENCES months(id),
+      FOREIGN KEY(sector_id) REFERENCES sectors(id)
+    );
 
-  CREATE TABLE IF NOT EXISTS performance_values (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    indicator_id INTEGER,
-    employee_id INTEGER,
-    value REAL,
-    FOREIGN KEY(indicator_id) REFERENCES indicators(id),
-    FOREIGN KEY(employee_id) REFERENCES employees(id)
-  );
-`);
+    CREATE TABLE IF NOT EXISTS performance_values (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      indicator_id INTEGER,
+      employee_id INTEGER,
+      value REAL,
+      FOREIGN KEY(indicator_id) REFERENCES indicators(id),
+      FOREIGN KEY(employee_id) REFERENCES employees(id)
+    );
+  `);
+  console.log("Database tables initialized.");
+} catch (err) {
+  console.error("Database initialization error:", err);
+}
 
 
 // Seed initial sectors if empty
-const sectorCount = db.prepare("SELECT COUNT(*) as count FROM sectors").get() as { count: number };
-if (sectorCount.count === 0) {
-  const insertSector = db.prepare("INSERT INTO sectors (name, color) VALUES (?, ?)");
-  insertSector.run("Agendamento", "#3b82f6");
-  insertSector.run("Onboarding", "#f97316");
-  insertSector.run("Ongoing", "#10b981");
-  insertSector.run("Retenção", "#ef4444");
-  insertSector.run("Chat", "#8b5cf6");
+try {
+  const sectorCount = db.prepare("SELECT COUNT(*) as count FROM sectors").get() as { count: number };
+  console.log("Current sector count:", sectorCount.count);
+  if (sectorCount.count === 0) {
+    console.log("Seeding initial sectors...");
+    const insertSector = db.prepare("INSERT INTO sectors (name, color) VALUES (?, ?)");
+    insertSector.run("Agendamento", "#3b82f6");
+    insertSector.run("Onboarding", "#f97316");
+    insertSector.run("Ongoing", "#10b981");
+    insertSector.run("Retenção", "#ef4444");
+    insertSector.run("Chat", "#8b5cf6");
+    console.log("Sectors seeded.");
+  }
+} catch (err) {
+  console.error("Sectors seeding error:", err);
 }
 
 // Seed initial month if empty
-const monthCount = db.prepare("SELECT COUNT(*) as count FROM months").get() as { count: number };
-if (monthCount.count === 0) {
-  const currentMonth = "03/2026";
-  const insertMonth = db.prepare("INSERT INTO months (name) VALUES (?)");
-  const monthResult = insertMonth.run(currentMonth);
-  const monthId = monthResult.lastInsertRowid;
+try {
+  const monthCount = db.prepare("SELECT COUNT(*) as count FROM months").get() as { count: number };
+  console.log("Current month count:", monthCount.count);
+  if (monthCount.count === 0) {
+    console.log("Seeding initial month and data...");
+    const currentMonth = "03/2026";
+    const insertMonth = db.prepare("INSERT INTO months (name) VALUES (?)");
+    const monthResult = insertMonth.run(currentMonth);
+    const monthId = monthResult.lastInsertRowid;
 
-  // Seed Onboarding example
-  const onboardingSector = db.prepare("SELECT id FROM sectors WHERE name = 'Onboarding'").get() as { id: number };
-  
-  const employees = [
-    { name: "Colaborador 1", img: "https://picsum.photos/seed/p1/100/100" },
-    { name: "Colaborador 2", img: "https://picsum.photos/seed/p2/100/100" },
-    { name: "Colaborador 3", img: "https://picsum.photos/seed/p3/100/100" },
-    { name: "Colaborador 4", img: "https://picsum.photos/seed/p4/100/100" },
-    { name: "Colaborador 5", img: "https://picsum.photos/seed/p5/100/100" },
-    { name: "Colaborador 6", img: "https://picsum.photos/seed/p6/100/100" },
-  ];
-
-  const empIds: number[] = [];
-  const insertEmp = db.prepare("INSERT INTO employees (month_id, sector_id, name, image_url) VALUES (?, ?, ?, ?)");
-  for (const emp of employees) {
-    const res = insertEmp.run(monthId, onboardingSector.id, emp.name, emp.img);
-    empIds.push(Number(res.lastInsertRowid));
-  }
-
-  const indicators = [
-    { name: "Clientes Ativos (Simples)", type: "NUMBER" },
-    { name: "Clientes Ativos (Recupera)", type: "NUMBER" },
-    { name: "Clientes Migrados", type: "NUMBER" },
-    { name: "% carteira concluída", type: "PERCENT" },
-    { name: "CSAT médio", type: "PERCENT" },
-    { name: "Total de Avaliação", type: "NUMBER" },
-    { name: "Backlog", type: "NUMBER" },
-    { name: "Chamados em Aberto", type: "NUMBER" },
-    { name: "Cancelamentos", type: "NUMBER", is_negative: 1 },
-    { name: "Inadimplente", type: "NUMBER", is_negative: 1 },
-    { name: "Cancelamento Automáticos", type: "NUMBER", is_negative: 1 },
-    { name: "Valor Perdido (Setor)", type: "CURRENCY", is_negative: 1 },
-    { name: "Valor Recuperado (Setor)", type: "CURRENCY" },
-  ];
-
-  const insertInd = db.prepare("INSERT INTO indicators (month_id, sector_id, name, type, is_negative, order_index) VALUES (?, ?, ?, ?, ?, ?)");
-  const insertVal = db.prepare("INSERT INTO performance_values (indicator_id, employee_id, value) VALUES (?, ?, ?)");
-
-  indicators.forEach((ind, idx) => {
-    const res = insertInd.run(monthId, onboardingSector.id, ind.name, ind.type, ind.is_negative || 0, idx);
-    const indId = res.lastInsertRowid;
+    // Seed Onboarding example
+    const onboardingSector = db.prepare("SELECT id FROM sectors WHERE name = 'Onboarding'").get() as { id: number };
     
-    empIds.forEach(empId => {
-      // Random data for example
-      const val = ind.type === 'PERCENT' ? Math.random() : Math.floor(Math.random() * 50);
-      insertVal.run(indId, empId, val);
+    const employees = [
+      { name: "Colaborador 1", img: "https://picsum.photos/seed/p1/100/100" },
+      { name: "Colaborador 2", img: "https://picsum.photos/seed/p2/100/100" },
+      { name: "Colaborador 3", img: "https://picsum.photos/seed/p3/100/100" },
+      { name: "Colaborador 4", img: "https://picsum.photos/seed/p4/100/100" },
+      { name: "Colaborador 5", img: "https://picsum.photos/seed/p5/100/100" },
+      { name: "Colaborador 6", img: "https://picsum.photos/seed/p6/100/100" },
+    ];
+
+    const empIds: number[] = [];
+    const insertEmp = db.prepare("INSERT INTO employees (month_id, sector_id, name, image_url) VALUES (?, ?, ?, ?)");
+    for (const emp of employees) {
+      const res = insertEmp.run(monthId, onboardingSector.id, emp.name, emp.img);
+      empIds.push(Number(res.lastInsertRowid));
+    }
+
+    const indicators = [
+      { name: "Clientes Ativos (Simples)", type: "NUMBER" },
+      { name: "Clientes Ativos (Recupera)", type: "NUMBER" },
+      { name: "Clientes Migrados", type: "NUMBER" },
+      { name: "% carteira concluída", type: "PERCENT" },
+      { name: "CSAT médio", type: "PERCENT" },
+      { name: "Total de Avaliação", type: "NUMBER" },
+      { name: "Backlog", type: "NUMBER" },
+      { name: "Chamados em Aberto", type: "NUMBER" },
+      { name: "Cancelamentos", type: "NUMBER", is_negative: 1 },
+      { name: "Inadimplente", type: "NUMBER", is_negative: 1 },
+      { name: "Cancelamento Automáticos", type: "NUMBER", is_negative: 1 },
+      { name: "Valor Perdido (Setor)", type: "CURRENCY", is_negative: 1 },
+      { name: "Valor Recuperado (Setor)", type: "CURRENCY" },
+    ];
+
+    const insertInd = db.prepare("INSERT INTO indicators (month_id, sector_id, name, type, is_negative, order_index) VALUES (?, ?, ?, ?, ?, ?)");
+    const insertVal = db.prepare("INSERT INTO performance_values (indicator_id, employee_id, value) VALUES (?, ?, ?)");
+
+    indicators.forEach((ind, idx) => {
+      const res = insertInd.run(monthId, onboardingSector.id, ind.name, ind.type, ind.is_negative || 0, idx);
+      const indId = res.lastInsertRowid;
+      
+      empIds.forEach(empId => {
+        const val = ind.type === 'PERCENT' ? Math.random() : Math.floor(Math.random() * 50);
+        insertVal.run(indId, empId, val);
+      });
     });
-  });
+    console.log("Initial month data seeded.");
+  }
+} catch (err) {
+  console.error("Month seeding error:", err);
 }
 
 const app = express();
@@ -135,6 +154,24 @@ const PORT = 3000;
 
 async function setupApp() {
   app.use(express.json());
+
+  // Debug Route
+  app.get("/api/debug", (req, res) => {
+    try {
+      const sectors = db.prepare("SELECT * FROM sectors").all();
+      const months = db.prepare("SELECT * FROM months").all();
+      res.json({
+        isVercel,
+        dbPath,
+        sectorsCount: sectors.length,
+        monthsCount: months.length,
+        sectors,
+        months
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message, stack: err.stack });
+    }
+  });
 
   // API Routes
   app.get("/api/months", (req, res) => {
