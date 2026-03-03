@@ -122,16 +122,20 @@ if (monthCount.count === 0) {
   });
 }
 
-async function startServer() {
-  const app = express();
-  const PORT = 3000;
+const app = express();
+const PORT = 3000;
 
+async function setupApp() {
   app.use(express.json());
 
   // API Routes
   app.get("/api/months", (req, res) => {
-    const months = db.prepare("SELECT * FROM months ORDER BY id DESC").all();
-    res.json(months);
+    try {
+      const months = db.prepare("SELECT * FROM months ORDER BY id DESC").all();
+      res.json(months);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
   });
 
   app.post("/api/months", (req, res) => {
@@ -308,10 +312,28 @@ async function startServer() {
       res.sendFile(path.resolve("dist/index.html"));
     });
   }
+}
 
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on http://localhost:${PORT}`);
-  });
+let isSetup = false;
+async function startServer() {
+  if (!isSetup) {
+    await setupApp();
+    isSetup = true;
+  }
+  
+  if (process.env.NODE_ENV !== "production") {
+    app.listen(PORT, "0.0.0.0", () => {
+      console.log(`Server running on http://localhost:${PORT}`);
+    });
+  }
 }
 
 startServer();
+
+export default async (req: any, res: any) => {
+  if (!isSetup) {
+    await setupApp();
+    isSetup = true;
+  }
+  return app(req, res);
+};
