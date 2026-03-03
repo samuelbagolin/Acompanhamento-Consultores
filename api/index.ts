@@ -4,7 +4,14 @@ import Database from "better-sqlite3";
 import path from "path";
 import fs from "fs";
 
-const db = new Database("dashboard.db");
+// On Vercel, we must use /tmp for any writeable files, 
+// but remember: this is temporary and will be wiped frequently.
+const isVercel = process.env.VERCEL === "1";
+const dbPath = isVercel ? path.join("/tmp", "dashboard.db") : "dashboard.db";
+
+// If on Vercel and DB doesn't exist in /tmp, we could try to copy a seed one if it existed,
+// but here we just initialize it.
+const db = new Database(dbPath);
 
 // Initialize Database
 db.exec(`
@@ -52,6 +59,7 @@ db.exec(`
     FOREIGN KEY(employee_id) REFERENCES employees(id)
   );
 `);
+
 
 // Seed initial sectors if empty
 const sectorCount = db.prepare("SELECT COUNT(*) as count FROM sectors").get() as { count: number };
